@@ -1,108 +1,70 @@
 const express = require('express');
 const server = express();
 
+const {find,
+    findById,
+    insert,
+    update,
+    remove,
+    findPostComments,
+    findCommentById,
+    insertComment} = require('./data/db')
+
 server.use(express.json());
 
 server.listen(5000, ()=>{
     console.log('server is running');
 })
 
-let posts = [{
-    id: 0,
-    title: "The post title",
-    contents: "The post contents",
-    created_at: 'Mon Aug 14 2017 12:50:16 GMT-0700 (PDT)',
-    updated_at: 'Mon Aug 14 2017 12:50:16 GMT-0700 (PDT)'
-  }];
-
-  let comments = [{
-    text: "The text of the comment",
-    post_id: 0,
-    created_at: 'Mon Aug 14 2017 12:50:16 GMT-0700 (PDT)',
-    updated_at: 'Mon Aug 14 2017 12:50:16 GMT-0700 (PDT)'
-  }]
-
   server.post('/api/posts', (req, res) =>{
-      if(req.body.title === undefined){
-          res.status(404).send({msg: 'missing title'})
+      if(req.body.title === undefined ||req.body.contents === undefined){
+          res.status(400).send({errorMessage: "Please provide title and contents for the post." })
       }
-      if(req.body.contents === undefined){
-        res.status(404).send({msg: 'missing contents'})
-      }
-      posts = [...posts, req.body];
-      res.send(posts);
-  });
+      insert(req.body).then(a =>{
+        findById(a.id).then(b => res.status(201).send(b))
+      }).catch(a =>{res.status(500).send({ error: "There was an error while saving the post to the database" })
+    })})
 
   server.post('/api/posts/:id/comments', (req, res) =>{
-    const {id} = req.params;
-    console.log(req.body);
-    const postIndex = posts.findIndex(a => a.id == id);
-    if (postIndex === -1){
-        res.status(404).send({msg: 'no such post'})
-    }
     if(req.body.text === undefined){
-        res.status(404).send({msg: 'missing text'})
+        res.status(400).send({errorMessage: "Please provide text for the comment."})
     }
-    comments = [...comments, req.body];
-    res.send(comments);
+    insertComment(req.body).then(a => findCommentById(a.id).then(b => res.status(201).send(b))).catch(err => res.status(404).send({ message: "The post with the specified ID does not exist."}))
 });
 
 server.get('/api/posts', (req, res) =>{
-    res.send(posts);
+    find().then(a => res.send(a)).catch(a => res.status(500).send({ error: "The posts information could not be retrieved." }));
 })
 
 server.get('/api/posts/:id', (req,res) =>{
     const {id} = req.params;
-    console.log(id);
-    const postIndex = posts.findIndex(a => a.id == id);
-    if (postIndex === -1){
-        res.status(404).send({msg: 'no such post'})
-    }
-    res.send(posts[postIndex]);
+    findById(id).then(a => {
+        if(a === []) res.status(404).send({ message: "The post with the specified ID does not exist." });
+        res.send(a);
+    }).catch(err => res.status(500).send({ error: "The post information could not be retrieved." }))
 })
 
 server.get('/api/posts/:id/comments', (req,res) =>{
     const {id} = req.params;
-    console.log(id);
-    const postIndex = posts.findIndex(a => a.id == id);
-    if (postIndex === -1){
-        res.status(404).send({msg: 'no such post'})
-    }
-    res.send(comments.filter(a => a.post_id == id));
+    findPostComments(id).then(a =>{
+        if(a === []) res.status(404).send({ message: "The post with the specified ID does not exist." })
+        res.send(a);
+    }).catch(err => res.status(500).send({ error: "The comments information could not be retrieved." }));
 })
 
 server.delete('/api/posts/:id', (req,res) =>{
     const {id} = req.params;
-    console.log(id);
-    const postIndex = posts.findIndex(a => a.id == id);
-    if (postIndex === -1){
-        res.status(404).send({msg: 'no such post'})
-    }
-    posts = posts.filter(a => a.id != id);
-    res.send(posts);
+    remove(id).then(a =>{
+        if(a !== 1) res.status(404).send({ message: "The post with the specified ID does not exist." })
+        res.send('successfully deleted')
+    }).catch(err => res.status(500).send({ error: "The post could not be removed" }))
 })
 
 server.put('/api/posts/:id', (req, res) =>{
     const {id} = req.params;
-    console.log(id);
-    const postIndex = posts.findIndex(a => a.id == id);
-    if (postIndex === -1){
-        res.status(404).send({msg: 'no such post'})
-    }
-    if(req.body.title === undefined){
-        res.status(404).send({msg: 'missing title'})
-    }
-    if(req.body.contents === undefined){
-      res.status(404).send({msg: 'missing contents'})
-    }
-    
-    const post = {...req.body };
-  
-      posts = [
-        ...posts.slice(0, postIndex),
-        post,
-        ...posts.slice(postIndex + 1)
-      ];
-    res.status(201).send(posts);
+    update(id, req.body).then(a =>{
+        if(a !== 1) res.status(404).send({ errorMessage: "Please provide title and contents for the post." })
+        findById(id).then(b => res.status(200).send(b))
+    }).catch(err => res.status(500).send({ error: "The post information could not be modified." }))
 });
  
